@@ -30,7 +30,7 @@ def main():
 
     with ImageImpulseRunner(model_path) as runner:
         model_info = runner.init()
-        print("Can model loaded correctly")
+        print("Can model loaded correctly", flush=True)
 
         cap = open_camera(camera_source)
         if not cap.isOpened():
@@ -39,10 +39,12 @@ def main():
             )
             return
 
+        print("Streaming can predictions...", flush=True)
+
         while True:
             success, img = cap.read()
             if not success:
-                print("Could not read frames from the camera.")
+                print("Could not read frames from the camera.", flush=True)
                 break
 
             features, _ = runner.get_features_from_image(img)
@@ -54,7 +56,7 @@ def main():
                     predictions.append(f"{bb['label']} ({bb['value']*100:.1f}%)")
 
                 if predictions:
-                    print("Predictions: " + ", ".join(predictions))
+                    print("Predictions: " + ", ".join(predictions), flush=True)
 
 
 if __name__ == "__main__":
