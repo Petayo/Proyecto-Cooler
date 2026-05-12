@@ -168,8 +168,8 @@ v4l2-ctl --device=/dev/video2 --list-formats-ext
 Environment variables:
 
 ```text
-DEMO_CAMERA_SOURCE=/dev/video2
-CAN_CAMERA_SOURCE=/dev/video4
+export DEMO_CAMERA_SOURCE=/dev/video2
+export CAN_CAMERA_SOURCE=/dev/video4
 ```
 
 You can also use indexes, for example `DEMO_CAMERA_INDEX=0`.
