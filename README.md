@@ -1,70 +1,49 @@
-# Getting Started with Create React App
+# Smart Cooler
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An edge AI system for smart coolers deployed in small shops. The system uses computer vision to track product inventory and demographic insights.
 
-## Available Scripts
+## Project Structure
 
-In the project directory, you can run:
+```
+.
+├── frontend/          # React dashboard application
+│   ├── src/           # React source code
+│   ├── public/        # Static assets
+│   ├── package.json   # Frontend dependencies
+│   └── README.md      # Frontend documentation
+├── backend/           # Backend services and CV models
+│   ├── can_detector_v1/        # Can/bottle detection model
+│   └── demographics_v2/        # Demographics detection model
+└── README.md          # This file
+```
 
-### `npm start`
+## Getting Started
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Frontend Setup
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```bash
+cd frontend
+npm install
+npm start
+```
 
-### `npm test`
+Frontend dashboard runs on `http://localhost:3000` by default.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Backend
 
-### `npm run build`
+Backend code and models are designed to run on a Rubik Pi edge board. See [backend/README.md](backend/README.md) for details.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Development
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- Frontend: React-based dashboard for metrics and insights
+- Backend: CV models (TensorFlow Lite) for can detection and demographics analysis
+- Models are deployed on edge hardware and won't run locally
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Key Features
 
-### `npm run eject`
+1. Real-time demographic polling from edge device
+2. Inventory tracking through bottle/can detection
+3. Daily/weekly aggregated analytics
+4. Restocking recommendations
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+For detailed frontend configuration, see [frontend/README.md](frontend/README.md).
