@@ -1,41 +1,56 @@
-# Can Detector v1 — Smart Fridge Object Detection
+# Can Detector v1
 
-Real-time object detection module for identifying soda cans and dairy products on the Rubik Pi 3.
+Edge Impulse can detection for the Rubik Pi board. This script is meant to run on-device with the local camera attached to the board, not on this workspace.
 
-This module uses a custom-trained model from Edge Impulse to detect and locate specific beverages inside a smart fridge environment. It is optimized to run on Qualcomm hardware using the QNN (Qualcomm Neural Network) accelerator.
+## What it does
 
----
+- Loads the Edge Impulse `.eim` model from `backend/can_detector_v1/models/soda_detector.eim`
+- Opens the can camera and runs live inference
+- Prints predictions directly in the terminal
 
-## Hardware / Environment
+## Requirements
 
-* **Device:** Rubik Pi 3 / Qualcomm QCS6490
-* **OS:** Ubuntu 24.04
-* **Camera:** USB webcam (typically `/dev/video0`)
-* **Framework:** Edge Impulse Linux (AARCH64)
-* **Acceleration:** Qualcomm QNN (Int8 Quantized)
+- Rubik Pi / compatible Linux edge board
+- Python 3
+- `opencv-python` or a system OpenCV build with V4L2 support
+- `edge_impulse_linux`
 
----
+Install the Python package on the board:
 
-## On-Device Performance (Estimated)
+```bash
+pip install edge_impulse_linux
+```
 
-* **Inferencing time:** 32094 ms (Standard) / <50 ms (Optimized with QNN)
-* **Peak RAM usage:** 914.3K
-* **Flash usage:** 705.3K
+## Run
 
----
+From `backend/can_detector_v1` on the board:
 
-## Classes (Labels)
+```bash
+python3 scripts/can_inference.py
+```
 
-The model is trained to recognize the following 8 categories:
-1. **Apple Soda** (Sidral Mundet/Manzana)
-2. **Carbonated Water**
-3. **Coke**
-4. **Jelly**
-5. **Mundet**
-6. **Soda**
-7. **Yogurt**
-8. **YogurtD** (Drinking Yogurt)
+The script defaults to `/dev/video2`.
 
----
+## Camera selection
 
-## Project Structure
+Override the camera if your board exposes it on another device node:
+
+```bash
+python3 scripts/can_inference.py /dev/video2
+```
+
+```bash
+CAN_CAMERA_SOURCE=/dev/video2 python3 scripts/can_inference.py
+```
+
+```bash
+CAN_CAMERA_INDEX=2 python3 scripts/can_inference.py
+```
+
+Use `v4l2-ctl --list-devices` to confirm which `/dev/video*` node belongs to the can camera.
+
+## Sync to the board
+
+From the repo root, run `./sync.sh` to rsync the contents of `backend/` into `~/smart-cooler` on the Rubik Pi.
+
+If you want to update the destination or host, edit `sync.sh`.

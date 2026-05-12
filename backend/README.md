@@ -15,7 +15,6 @@ The system is designed as part of a Smart Fridge Vision project running on Rubik
 - **Device:** Rubik Pi 3 / Qualcomm QCS6490
 - **OS:** Ubuntu 24.04
 - **Camera:** USB webcam
-- **Camera port:** `/dev/video0`
 - **Python:** 3.12 recommended
 - **Backend:** FastAPI + Uvicorn
 - **Computer Vision:** OpenCV DNN + ONNX Runtime
@@ -147,7 +146,15 @@ onnxruntime
 
 ## Camera Configuration
 
-The current camera pipeline expects:
+The camera device can vary by board and connected sensor. The can detector script defaults to camera index `0`, but you can override it with a device path or index when needed.
+
+Find the active camera device with:
+
+```bash
+v4l2-ctl --list-devices
+```
+
+The demographics pipeline currently expects:
 
 ```text
 Device: /dev/video2
