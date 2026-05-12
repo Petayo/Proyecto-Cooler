@@ -1,8 +1,9 @@
 # Proyecto-Cooler
 
-# Demographics v2 — Smart Fridge Vision API
+# Smart Cooler Backend
 
-Real-time age and gender detection module for Rubik Pi 3.
+Edge backend for Rubik Pi 3. Each model runs in its own folder, and the unified
+API service exposes events for both demographics and can detection.
 
 This project runs a camera-based demographics pipeline and exposes the results through a FastAPI backend. The current version detects faces, predicts gender and age group, and stores recent events in memory so they can be consumed by a frontend or another service.
 
@@ -44,19 +45,18 @@ API endpoints
 ## Project Structure
 
 ```text
-demographics_v2/
-├── backend/
-│   ├── main.py
+backend/
+├── api/
 │   ├── collector.py
-│   └── models.py
-├── scripts/
-│   └── demographics_json.py
-├── models_cpu/
-│   └── face_detector/
-│       ├── deploy.prototxt
-│       └── res10_300x300_ssd_iter_140000.caffemodel
-├── requirements.txt
-└── README.md
+│   └── main.py
+├── can_detector_v1/
+│   ├── models/
+│   └── scripts/
+│       └── can_inference.py
+└── demographics_v2/
+  ├── models_cpu/
+  └── scripts/
+    └── demographics_json.py
 ```
 
 ---
@@ -194,9 +194,15 @@ Example line to modify:
 From the backend folder:
 
 ```bash
-cd ~/rubikpi/demographics_v2/backend
+cd ~/rubikpi/backend/api
 python3 main.py
 ```
+
+The API exposes:
+
+1. `/events/demographics` for outside-camera detections.
+2. `/events/can` for inside-camera detections.
+3. `/captures/{filename}` to serve captured images.
 
 The backend starts the demographics collector automatically.
 

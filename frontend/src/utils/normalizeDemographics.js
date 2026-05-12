@@ -50,23 +50,39 @@ export const normalizeDemographicsPayload = (payload) => {
     return [];
   }
 
-  const detections = Array.isArray(payload.detections) ? payload.detections : [];
-  const eventTime = normalizeTimestamp(payload.timestamp);
+  const events = Array.isArray(payload.events)
+    ? payload.events
+    : payload.detections
+      ? [payload]
+      : [];
 
-  return detections
-    .map((detection, index) => {
+  const normalized = [];
+
+  events.forEach((event) => {
+    if (!event || typeof event !== 'object') {
+      return;
+    }
+
+    const detections = Array.isArray(event.detections) ? event.detections : [];
+    const eventTime = normalizeTimestamp(event.timestamp);
+    const imageUrl = typeof event.image_url === 'string' ? event.image_url : null;
+
+    detections.forEach((detection, index) => {
       if (!detection || typeof detection !== 'object') {
-        return null;
+        return;
       }
 
-      return {
+      normalized.push({
         id: `${eventTime.toISOString()}-${index}-${Math.random().toString(36).slice(2, 9)}`,
         timestamp: eventTime,
         gender: normalizeGender(detection.gender),
         genderConfidence: normalizeConfidence(detection.gender_confidence),
         ageGroup: normalizeAgeGroup(detection.age_group),
         ageConfidence: normalizeConfidence(detection.age_confidence),
-      };
-    })
-    .filter(Boolean);
+        imageUrl,
+      });
+    });
+  });
+
+  return normalized;
 };

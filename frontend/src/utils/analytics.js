@@ -143,3 +143,34 @@ export const deriveBottleMetrics = (events, now = new Date()) => {
       .slice(0, 10),
   };
 };
+
+export const deriveCanMetrics = (events, now = new Date()) => {
+  const validEvents = Array.isArray(events) ? events : [];
+  const today = startOfDay(now);
+  const weekWindowStart = new Date(now);
+  weekWindowStart.setDate(weekWindowStart.getDate() - 6);
+  weekWindowStart.setHours(0, 0, 0, 0);
+
+  const todayEvents = validEvents.filter((event) => event.timestamp >= today);
+  const weekEvents = validEvents.filter((event) => event.timestamp >= weekWindowStart);
+
+  const labelCounts = {};
+  for (const event of weekEvents) {
+    labelCounts[event.label] = (labelCounts[event.label] || 0) + 1;
+  }
+
+  const topLabel = Object.entries(labelCounts)
+    .sort(([, left], [, right]) => right - left)[0]?.[0] || 'N/A';
+
+  const recentEvents = [...validEvents]
+    .sort((a, b) => b.timestamp.valueOf() - a.timestamp.valueOf())
+    .slice(0, 12);
+
+  return {
+    totalToday: todayEvents.length,
+    totalWeek: weekEvents.length,
+    topLabel,
+    labelCounts,
+    recentEvents,
+  };
+};

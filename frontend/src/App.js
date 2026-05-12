@@ -1,8 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { APP_CONFIG } from './config/appConfig';
-import { useBottleSimulator } from './hooks/useBottleSimulator';
+import { useCanPolling } from './hooks/useCanPolling';
 import { useDemographicsPolling } from './hooks/useDemographicsPolling';
-import { deriveDemographicMetrics } from './utils/analytics';
+import { deriveCanMetrics, deriveDemographicMetrics } from './utils/analytics';
 import './App.css';
 
 const formatTime = (date) => {
@@ -26,41 +26,89 @@ const formatEventTime = (date) =>
     second: '2-digit',
   }).format(date);
 
+const buildConnectionState = ({ isLoading, error, isStale }) => {
+  if (isLoading) {
+    return { label: 'Connecting', className: 'state-warn' };
+  }
+
+  if (error) {
+    return { label: 'Offline', className: 'state-error' };
+  }
+
+  if (isStale) {
+    return { label: 'Stale feed', className: 'state-warn' };
+  }
+
+  return { label: 'Live', className: 'state-ok' };
+};
+
+const collectRecentImages = (events, labelBuilder, maxItems = 6) => {
+  const seen = new Set();
+  const sorted = [...events].sort(
+    (a, b) => b.timestamp.valueOf() - a.timestamp.valueOf()
+  );
+
+  const images = [];
+  for (const event of sorted) {
+    if (!event.imageUrl || seen.has(event.imageUrl)) {
+      continue;
+    }
+
+    seen.add(event.imageUrl);
+    images.push({
+      id: event.id,
+      url: event.imageUrl,
+      label: labelBuilder(event),
+    });
+
+    if (images.length >= maxItems) {
+      break;
+    }
+  }
+
+  return images;
+};
+
 function App() {
-  const { events, isLoading, error, lastSuccessAt, isStale, endpointUrl } =
-    useDemographicsPolling();
-  const bottle = useBottleSimulator();
-  const { isRunning, appendEvent } = bottle;
+  const {
+    events: demographicEvents,
+    isLoading: demoLoading,
+    error: demoError,
+    lastSuccessAt: demoLastSuccessAt,
+    isStale: demoStale,
+    endpointUrl: demoEndpointUrl,
+  } = useDemographicsPolling();
+  const {
+    events: canEvents,
+    isLoading: canLoading,
+    error: canError,
+    lastSuccessAt: canLastSuccessAt,
+    isStale: canStale,
+    endpointUrl: canEndpointUrl,
+  } = useCanPolling();
+  const demographicMetrics = useMemo(
+    () => deriveDemographicMetrics(demographicEvents),
+    [demographicEvents]
+  );
+  const canMetrics = useMemo(() => deriveCanMetrics(canEvents), [canEvents]);
 
-  useEffect(() => {
-    if (!isRunning) {
-      return undefined;
-    }
+  const demoConnection = useMemo(
+    () => buildConnectionState({ isLoading: demoLoading, error: demoError, isStale: demoStale }),
+    [demoLoading, demoError, demoStale]
+  );
+  const canConnection = useMemo(
+    () => buildConnectionState({ isLoading: canLoading, error: canError, isStale: canStale }),
+    [canLoading, canError, canStale]
+  );
 
-    const interval = setInterval(() => {
-      appendEvent();
-    }, 2100);
-
-    return () => clearInterval(interval);
-  }, [appendEvent, isRunning]);
-
-  const demographicMetrics = useMemo(() => deriveDemographicMetrics(events), [events]);
-
-  const connectionState = useMemo(() => {
-    if (isLoading) {
-      return { label: 'Connecting', className: 'state-warn' };
-    }
-
-    if (error) {
-      return { label: 'Offline', className: 'state-error' };
-    }
-
-    if (isStale) {
-      return { label: 'Stale feed', className: 'state-warn' };
-    }
-
-    return { label: 'Live', className: 'state-ok' };
-  }, [error, isLoading, isStale]);
+  const recentDemoImages = useMemo(
+    () => collectRecentImages(demographicEvents, (event) => `${event.gender} / ${event.ageGroup}`),
+    [demographicEvents]
+  );
+  const recentCanImages = useMemo(
+    () => collectRecentImages(canEvents, (event) => event.label),
+    [canEvents]
+  );
 
   const weeklyMax = Math.max(
     1,
@@ -76,26 +124,39 @@ function App() {
             <p className="eyebrow">Smart Cooler Intelligence</p>
             <h1>Retail Restock Command</h1>
             <p className="muted">
-              Live demographics from the outside camera, plus simulated bottle traffic
-              while inventory detection model integration is pending.
+              Live demographics and can detections from both cameras, with captured
+              frames surfaced for fast inventory decisions.
             </p>
           </div>
           <div className="status-cluster">
-            <span className={`status-pill ${connectionState.className}`}>
-              {connectionState.label}
-            </span>
+            <div className="status-row">
+              <span className={`status-pill ${demoConnection.className}`}>
+                Demographics: {demoConnection.label}
+              </span>
+              <span className={`status-pill ${canConnection.className}`}>
+                Can model: {canConnection.label}
+              </span>
+            </div>
             <div className="meta-list">
               <p>
-                <strong>Endpoint</strong>
-                <span>{endpointUrl}</span>
+                <strong>Demographics API</strong>
+                <span>{demoEndpointUrl}</span>
+              </p>
+              <p>
+                <strong>Can API</strong>
+                <span>{canEndpointUrl}</span>
               </p>
               <p>
                 <strong>Polling</strong>
                 <span>{APP_CONFIG.pollingIntervalMs} ms</span>
               </p>
               <p>
-                <strong>Last update</strong>
-                <span>{formatTime(lastSuccessAt)}</span>
+                <strong>Last demographics</strong>
+                <span>{formatTime(demoLastSuccessAt)}</span>
+              </p>
+              <p>
+                <strong>Last can event</strong>
+                <span>{formatTime(canLastSuccessAt)}</span>
               </p>
             </div>
           </div>
@@ -115,8 +176,8 @@ function App() {
             <h2>{demographicMetrics.peakHour}</h2>
           </article>
           <article className="panel kpi-card">
-            <p>Top simulated demand</p>
-            <h2>{bottle.metrics.topDemand}</h2>
+            <p>Top can label</p>
+            <h2>{canMetrics.topLabel}</h2>
           </article>
         </section>
 
@@ -203,65 +264,90 @@ function App() {
             </ul>
           </article>
 
-          <article className="panel section-card bottle-panel">
-            <h3>Bottle model placeholder</h3>
-            <p className="muted">
-              Model not ready yet. Use simulator to test downstream restock analytics.
-            </p>
-            <div className="sim-controls">
-              {bottle.isRunning ? (
-                <button type="button" onClick={bottle.stop} className="btn secondary">
-                  Pause simulator
-                </button>
-              ) : (
-                <button type="button" onClick={bottle.start} className="btn primary">
-                  Start simulator
-                </button>
-              )}
-              <button type="button" onClick={bottle.appendEvent} className="btn ghost">
-                Add single event
-              </button>
-              <button type="button" onClick={bottle.clear} className="btn ghost">
-                Clear
-              </button>
-            </div>
-
+          <article className="panel section-card can-panel">
+            <h3>Can detections</h3>
             <div className="sim-stats">
               <p>
-                <strong>OUT today</strong>
-                <span>{bottle.metrics.outToday}</span>
+                <strong>Detections today</strong>
+                <span>{canMetrics.totalToday}</span>
               </p>
               <p>
-                <strong>IN today</strong>
-                <span>{bottle.metrics.inToday}</span>
+                <strong>Detections this week</strong>
+                <span>{canMetrics.totalWeek}</span>
               </p>
               <p>
-                <strong>Net OUT</strong>
-                <span>{bottle.metrics.netOutToday}</span>
+                <strong>Top label</strong>
+                <span>{canMetrics.topLabel}</span>
               </p>
             </div>
-
-            <ul className="event-list bottle-events">
-              {bottle.metrics.recentEvents.length ? (
-                bottle.metrics.recentEvents.map((event) => (
+            <div className="age-list">
+              {Object.keys(canMetrics.labelCounts).length ? (
+                Object.entries(canMetrics.labelCounts).map(([label, count]) => (
+                  <p key={label}>
+                    <span>{label}</span>
+                    <span>{count}</span>
+                  </p>
+                ))
+              ) : (
+                <p className="empty-text">No detections yet.</p>
+              )}
+            </div>
+            <h4>Recent can events</h4>
+            <ul className="event-list">
+              {canMetrics.recentEvents.length ? (
+                canMetrics.recentEvents.map((event) => (
                   <li key={event.id}>
                     <span>{formatEventTime(event.timestamp)}</span>
                     <span>
-                      {event.product} {event.action}
+                      {event.label}
+                      {event.confidence ? ` (${event.confidence.toFixed(1)}%)` : ''}
                     </span>
                   </li>
                 ))
               ) : (
-                <li className="empty-text">No simulated bottle events yet.</li>
+                <li className="empty-text">Waiting for can detections...</li>
               )}
             </ul>
           </article>
         </section>
 
-        {error ? (
+        <section className="capture-grid" aria-label="Recent captures">
+          <article className="panel section-card">
+            <h3>Recent demographics captures</h3>
+            <div className="image-grid">
+              {recentDemoImages.length ? (
+                recentDemoImages.map((item) => (
+                  <figure className="image-card" key={item.id}>
+                    <img src={item.url} alt={item.label} loading="lazy" />
+                    <figcaption>{item.label}</figcaption>
+                  </figure>
+                ))
+              ) : (
+                <p className="empty-text">No captures yet.</p>
+              )}
+            </div>
+          </article>
+          <article className="panel section-card">
+            <h3>Recent can captures</h3>
+            <div className="image-grid">
+              {recentCanImages.length ? (
+                recentCanImages.map((item) => (
+                  <figure className="image-card" key={item.id}>
+                    <img src={item.url} alt={item.label} loading="lazy" />
+                    <figcaption>{item.label}</figcaption>
+                  </figure>
+                ))
+              ) : (
+                <p className="empty-text">No captures yet.</p>
+              )}
+            </div>
+          </article>
+        </section>
+
+        {demoError || canError ? (
           <aside className="panel warning-panel" role="status">
-            Edge connection failed: {error}. Keep the board reachable and confirm CORS
-            allows this frontend origin.
+            Edge connection failed: {demoError || canError}. Keep the board reachable
+            and confirm CORS allows this frontend origin.
           </aside>
         ) : null}
       </main>

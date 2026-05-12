@@ -37,6 +37,7 @@ Backend code and models are designed to run on a Rubik Pi edge board. See [backe
 
 - Frontend: React-based dashboard for metrics and insights
 - Backend: CV models (TensorFlow Lite) for can detection and demographics analysis
+- API: Unified FastAPI service in backend/api for both models
 - Models are deployed on edge hardware and won't run locally
 
 ## Key Features

@@ -10,7 +10,7 @@ export const useBottleSimulator = () => {
   const stop = useCallback(() => setIsRunning(false), []);
 
   const appendEvent = useCallback(() => {
-    setEvents((previous) => [...previous, generateBottleEvent()].slice(-APP_CONFIG.maxBottleEvents));
+    setEvents((previous) => [...previous, generateBottleEvent()].slice(-APP_CONFIG.maxCanEvents));
   }, []);
 
   const clear = useCallback(() => {
