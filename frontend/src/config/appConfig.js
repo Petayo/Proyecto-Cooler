@@ -8,6 +8,7 @@ export const APP_CONFIG = {
   demographicsEventsPath:
     process.env.REACT_APP_DEMOGRAPHICS_EVENTS_PATH || '/events/demographics',
   canEventsPath: process.env.REACT_APP_CAN_EVENTS_PATH || '/events/can',
+  capturesPath: process.env.REACT_APP_CAPTURES_PATH || '/captures',
   pollingIntervalMs: toNumber(process.env.REACT_APP_POLLING_INTERVAL_MS, 1500),
   staleAfterMs: toNumber(process.env.REACT_APP_STALE_AFTER_MS, 12000),
   maxDemographicEvents: toNumber(process.env.REACT_APP_MAX_DEMOGRAPHIC_EVENTS, 2000),
@@ -28,6 +29,15 @@ export const buildCanUrl = () => {
   const path = APP_CONFIG.canEventsPath.startsWith('/')
     ? APP_CONFIG.canEventsPath
     : `/${APP_CONFIG.canEventsPath}`;
+
+  return `${base}${path}`;
+};
+
+export const buildCapturesUrl = () => {
+  const base = APP_CONFIG.edgeBaseUrl.replace(/\/$/, '');
+  const path = APP_CONFIG.capturesPath.startsWith('/')
+    ? APP_CONFIG.capturesPath
+    : `/${APP_CONFIG.capturesPath}`;
 
   return `${base}${path}`;
 };

@@ -3,6 +3,20 @@ import App from './App';
 
 beforeEach(() => {
   global.fetch = jest.fn().mockImplementation((url) => {
+    if (typeof url === 'string' && url.includes('/captures')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          captures: [
+            {
+              filename: 'can_20260512_000000_abcd.jpg',
+              url: 'http://edge.local/captures/can_20260512_000000_abcd.jpg',
+            },
+          ],
+        }),
+      });
+    }
+
     if (typeof url === 'string' && url.includes('/events/can')) {
       return Promise.resolve({
         ok: true,

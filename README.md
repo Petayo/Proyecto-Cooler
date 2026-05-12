@@ -51,7 +51,7 @@ sudo apt install sshpass
 ## Development
 
 - Frontend: React-based dashboard for metrics and insights
-- Backend: CV models (TensorFlow Lite) for can detection and demographics analysis
+- Backend: CV modgels (TensorFlow Lite) for can detection and demographics analysis
 - API: Unified FastAPI service in backend/api for both models
 - Models are deployed on edge hardware and won't run locally
 

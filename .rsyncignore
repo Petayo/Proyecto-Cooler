@@ -8,5 +8,6 @@ __pycache__/
 .venv/
 venv/
 .env
+.onnx
 .DS_Store
 captures/
