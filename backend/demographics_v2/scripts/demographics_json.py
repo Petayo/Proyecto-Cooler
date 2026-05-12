@@ -24,6 +24,7 @@ GENDER_HISTORY = 10
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
 STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
 
+
 def _resolve_camera_source():
     source = os.environ.get(
         "DEMO_CAMERA_SOURCE", os.environ.get("DEMO_CAMERA_INDEX", "/dev/video2")
@@ -39,6 +40,7 @@ def _build_gstreamer_pipeline(source):
         "video/x-raw,format=BGR ! "
         "appsink drop=true max-buffers=1 sync=false"
     )
+
 
 os.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
 os.environ["WAYLAND_DISPLAY"] = "wayland-1"

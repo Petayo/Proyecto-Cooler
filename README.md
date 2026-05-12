@@ -12,6 +12,7 @@ An edge AI system for smart coolers deployed in small shops. The system uses com
 │   ├── package.json   # Frontend dependencies
 │   └── README.md      # Frontend documentation
 ├── backend/           # Backend services and CV models
+│   ├── api/            # Unified FastAPI service
 │   ├── can_detector_v1/        # Can/bottle detection model
 │   └── demographics_v2/        # Demographics detection model
 └── README.md          # This file
@@ -32,6 +33,20 @@ Frontend dashboard runs on `http://localhost:3000` by default.
 ### Backend
 
 Backend code and models are designed to run on a Rubik Pi edge board. See [backend/README.md](backend/README.md) for details.
+
+### Deploy to Rubik Pi
+
+From the repo root:
+
+```bash
+./sync.sh
+```
+
+`sync.sh` uses `sshpass` for password-based rsync. Install it locally with:
+
+```bash
+sudo apt install sshpass
+```
 
 ## Development
 

@@ -100,3 +100,7 @@ App runs at `http://localhost:3000`.
 ## Network and CORS
 
 The edge endpoint must allow browser access from the frontend origin, including appropriate CORS headers.
+
+Captured images are served from `/captures/{filename}` by the backend. If images do
+not appear, confirm the backend is running and the Rubik Pi has a writable
+`~/smart-cooler/captures` directory.

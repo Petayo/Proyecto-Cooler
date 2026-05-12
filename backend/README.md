@@ -1,13 +1,10 @@
-# Proyecto-Cooler
-
 # Smart Cooler Backend
 
 Edge backend for Rubik Pi 3. Each model runs in its own folder, and the unified
 API service exposes events for both demographics and can detection.
 
-This project runs a camera-based demographics pipeline and exposes the results through a FastAPI backend. The current version detects faces, predicts gender and age group, and stores recent events in memory so they can be consumed by a frontend or another service.
-
-The system is designed as part of a Smart Fridge Vision project running on Rubik Pi 3.
+The system captures frames, runs inference per model, stores recent events in
+memory, and serves captured images for the frontend.
 
 ---
 
@@ -19,13 +16,14 @@ The system is designed as part of a Smart Fridge Vision project running on Rubik
 - **Python:** 3.12 recommended
 - **Backend:** FastAPI + Uvicorn
 - **Computer Vision:** OpenCV DNN + ONNX Runtime
+- **Inference:** Edge Impulse runtime for can detection
 
 ---
 
 ## Current Pipeline
 
 ```text
-USB Camera (/dev/video2)
+Outside Camera (set by DEMO_CAMERA_SOURCE)
         ↓
 GStreamer / OpenCV frame capture
         ↓
@@ -54,14 +52,14 @@ backend/
 │   └── scripts/
 │       └── can_inference.py
 └── demographics_v2/
-  ├── models_cpu/
-  └── scripts/
-    └── demographics_json.py
+    ├── models_cpu/
+    └── scripts/
+        └── demographics_json.py
 ```
 
 ---
 
-## Important: Download the Age/Gender ONNX Model
+## Download the Age/Gender ONNX Model
 
 The age/gender model is **not included in this repository** because it is too large.
 
@@ -87,7 +85,7 @@ demographics_v2/models_cpu/age_gender/age_gender_modern.onnx
 The current script expects the model at:
 
 ```text
-/home/ubuntu/rubikpi/demographics_v2/models_cpu/age_gender/age_gender_modern.onnx
+/home/ubuntu/smart-cooler/demographics_v2/models_cpu/age_gender/age_gender_modern.onnx
 ```
 
 If your project is located somewhere else, update `MODEL_PATH` inside:
@@ -126,18 +124,9 @@ sudo apt install -y gstreamer1.0-plugins-qcom
 From the project folder:
 
 ```bash
-cd ~/rubikpi/demographics_v2
-pip3 install --break-system-packages -r requirements.txt
-```
-
-Recommended `requirements.txt`:
-
-```txt
-fastapi
-uvicorn[standard]
-pydantic
-numpy
-onnxruntime
+cd ~/smart-cooler
+pip3 install --break-system-packages -r demographics_v2/requirements.txt
+pip3 install edge_impulse_linux
 ```
 
 > Note: OpenCV is required, but on Rubik Pi it is better to use the system/OpenCV build that supports GStreamer instead of installing `opencv-python` through pip. The pip version may not include GStreamer support.
@@ -146,7 +135,8 @@ onnxruntime
 
 ## Camera Configuration
 
-The camera device can vary by board and connected sensor. The can detector script defaults to camera index `0`, but you can override it with a device path or index when needed.
+Each model must use a different camera device. Configure both cameras using env
+vars before starting the API service.
 
 Find the active camera device with:
 
@@ -175,7 +165,28 @@ Verify supported formats:
 v4l2-ctl --device=/dev/video2 --list-formats-ext
 ```
 
-If the camera appears on another port, edit the `CAMERA_PIPELINE` inside:
+Environment variables:
+
+```text
+DEMO_CAMERA_SOURCE=/dev/video0
+CAN_CAMERA_SOURCE=/dev/video2
+```
+
+You can also use indexes, for example `DEMO_CAMERA_INDEX=0`.
+
+Find active camera devices with:
+
+```bash
+v4l2-ctl --list-devices
+```
+
+Verify supported formats:
+
+```bash
+v4l2-ctl --device=/dev/video2 --list-formats-ext
+```
+
+If needed, edit the GStreamer pipeline in:
 
 ```text
 demographics_v2/scripts/demographics_json.py
@@ -194,7 +205,9 @@ Example line to modify:
 From the backend folder:
 
 ```bash
-cd ~/rubikpi/backend/api
+cd ~/smart-cooler/api
+export DEMO_CAMERA_SOURCE=/dev/video0
+export CAN_CAMERA_SOURCE=/dev/video2
 python3 main.py
 ```
 
@@ -203,8 +216,9 @@ The API exposes:
 1. `/events/demographics` for outside-camera detections.
 2. `/events/can` for inside-camera detections.
 3. `/captures/{filename}` to serve captured images.
+4. `/captures` to list recent captures.
 
-The backend starts the demographics collector automatically.
+The backend starts both collectors automatically.
 
 Default API URL:
 
@@ -234,7 +248,7 @@ Example response:
 
 ```json
 {
-  "message": "Smart Fridge Vision API",
+  "message": "Smart Cooler API",
   "docs": "/docs"
 }
 ```
@@ -288,11 +302,14 @@ Example response:
     {
       "timestamp": "2026-05-11T00:00:00+00:00",
       "source": "demographics",
+      "image_path": "demo_20260511_000000_ab12cd.jpg",
+      "image_url": "http://192.168.1.153:8000/captures/demo_20260511_000000_ab12cd.jpg",
       "detections": [
         {
           "gender": "Male",
           "gender_confidence": 94.2,
-          "age_group": "18-24"
+          "age_group": "18-24",
+          "age_confidence": null
         }
       ]
     }
@@ -309,25 +326,28 @@ Example response:
 GET /events/can?limit=50
 ```
 
-Placeholder endpoint for future can detector integration.
+Returns can detector events.
 
----
-
-### Post Can Detector Event
-
-```http
-POST /events/can
-```
-
-Placeholder endpoint for the can detector model.
-
-Example body:
+Example response:
 
 ```json
 {
-  "product": "Coca-Cola",
-  "action": "detected",
-  "confidence": 0.94
+  "events": [
+    {
+      "timestamp": "2026-05-11T00:00:00+00:00",
+      "source": "can_detector",
+      "image_path": "can_20260511_000000_ab12cd.jpg",
+      "image_url": "http://192.168.1.153:8000/captures/can_20260511_000000_ab12cd.jpg",
+      "detections": [
+        {
+          "label": "Coke",
+          "confidence": 94.2,
+          "box": { "x": 120, "y": 64, "width": 220, "height": 310 }
+        }
+      ]
+    }
+  ],
+  "count": 1
 }
 ```
 
@@ -335,19 +355,15 @@ Example body:
 
 ## Event Format
 
-Demographics events follow this structure:
+Both models emit:
 
 ```json
 {
   "timestamp": "2026-05-11T00:00:00+00:00",
-  "source": "demographics",
-  "detections": [
-    {
-      "gender": "Female",
-      "gender_confidence": 89.5,
-      "age_group": "18-24"
-    }
-  ]
+  "source": "demographics | can_detector",
+  "image_path": "demo_...jpg | can_...jpg",
+  "image_url": "http://192.168.1.153:8000/captures/<filename>",
+  "detections": []
 }
 ```
 
@@ -355,11 +371,14 @@ Demographics events follow this structure:
 
 ## How It Works
 
-The backend starts `demographics_json.py` as a subprocess.
+The API starts both model scripts as subprocesses:
 
-The script reads frames from the USB camera, detects faces using the Caffe face detector, predicts age and gender using an ONNX model, and prints JSON events to stdout.
+1. `demographics_json.py` captures frames, detects faces, predicts age/gender, writes annotated images, and prints JSON events.
+2. `can_inference.py` runs the Edge Impulse model, writes annotated images, and prints JSON events.
 
-The collector reads those JSON lines, stores the latest events in an in-memory circular buffer, and exposes them through the FastAPI endpoints.
+The collector reads those JSON lines, stores the latest events in an in-memory
+circular buffer, and exposes them through the FastAPI endpoints. Subprocess
+stderr is forwarded to the API logs for troubleshooting.
 
 ---
 
@@ -368,54 +387,24 @@ The collector reads those JSON lines, stores the latest events in an in-memory c
 * Face detection uses OpenCV DNN with a Caffe ResNet SSD model.
 * Age/gender prediction uses an ONNX model through ONNX Runtime.
 * The age/gender ONNX model is not included in Git and must be downloaded during setup.
-* The backend stores the latest 1000 events in memory.
-* The can detector endpoints already exist, but the can model is still pending integration.
-* OpenCV is required even without visual display because it is used for camera capture, frame processing, and face detection.
+* The backend stores the latest 2000 events in memory.
+* OpenCV is required for camera capture and frame processing.
 * GStreamer is required for the current camera capture pipeline.
-* Wayland/display variables are not essential for the API-only flow unless visual output is added later.
-
----
-
-## Git Ignore Recommendation
-
-The repository should ignore large model files and Python cache files:
-
-```gitignore
-*.onnx
-*.pt
-*.pth
-*.engine
-__pycache__/
-*.pyc
-.env
-.venv/
-venv/
-.DS_Store
-```
 
 ---
 
 ## Run Checklist
 
-1. Clone the repository.
+1. Clone the repository on the Rubik Pi.
 2. Install system dependencies.
 3. Install Python dependencies.
 4. Download `age_gender_modern.onnx`.
-5. Verify camera is available at `/dev/video2`.
+5. Set `DEMO_CAMERA_SOURCE` and `CAN_CAMERA_SOURCE` to different devices.
 6. Run the backend with `python3 main.py`.
 7. Open `/docs` or call `/status`.
 
----
+## Troubleshooting
 
-## Current Status
-
-Implemented:
-
-* Demographics backend
-* Camera-based age/gender JSON pipeline
-* FastAPI endpoints
-* In-memory event collector
-* Placeholder can detector endpoints
-
-```
-```
+* If a collector stops immediately, check API logs for stderr output.
+* If you see "device is busy", set different camera devices for `DEMO_CAMERA_SOURCE` and `CAN_CAMERA_SOURCE`.
+* If demographics stops with missing files, confirm the age/gender ONNX model path is correct.
