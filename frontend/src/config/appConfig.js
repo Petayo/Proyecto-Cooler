@@ -4,7 +4,7 @@ const toNumber = (value, fallback) => {
 };
 
 export const APP_CONFIG = {
-  edgeBaseUrl: process.env.REACT_APP_EDGE_BASE_URL || 'http://192.168.1.131:8000',
+  edgeBaseUrl: process.env.REACT_APP_EDGE_BASE_URL || 'http://192.168.1.153:8000',
   demographicsPath: process.env.REACT_APP_DEMOGRAPHICS_PATH || '/demographics',
   pollingIntervalMs: toNumber(process.env.REACT_APP_POLLING_INTERVAL_MS, 1500),
   staleAfterMs: toNumber(process.env.REACT_APP_STALE_AFTER_MS, 12000),

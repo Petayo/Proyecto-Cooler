@@ -3,3 +3,4 @@ Thsi project is a smart cooler: an edge ai board (rubikpi) will be running two m
 Dont use emojis in code.
 Remember that the models will only be run on the board, they require tflite and wont run here.
 Always do testing after a feature and make sure nothing broke.
+Maintain a single clear documentation structure, dont add additional per-feature md files, just update the main README.md and the frontend/backend READMEs as needed, and keep them concise and complete. Avoid redundancies.
