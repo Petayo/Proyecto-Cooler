@@ -6,11 +6,15 @@ import numpy as np
 import cv2
 import onnxruntime as ort
 from datetime import datetime, timezone
+import uuid
 
 # ── Configuración ──────────────────────────────────────────────────────────────
-MODEL_PATH   = "/home/ubuntu/rubikpi/demographics_v2/models_cpu/age_gender/age_gender_modern.onnx"
-FACE_PROTO   = "/home/ubuntu/rubikpi/demographics_v2/models_cpu/face_detector/deploy.prototxt"
-FACE_WEIGHTS = "/home/ubuntu/rubikpi/demographics_v2/models_cpu/face_detector/res10_300x300_ssd_iter_140000.caffemodel"
+CAPTURES_DIR    = "/home/ubuntu/rubikpi/captures"
+MODEL_PATH      = "/home/ubuntu/rubikpi/demographics_v2/models_cpu/age_gender/age_gender_modern.onnx"
+FACE_PROTO      = "/home/ubuntu/rubikpi/demographics_v2/models_cpu/face_detector/deploy.prototxt"
+FACE_WEIGHTS    = "/home/ubuntu/rubikpi/demographics_v2/models_cpu/face_detector/res10_300x300_ssd_iter_140000.caffemodel"
+CAPTURE_COOLDOWN_S = 5      # segundos mínimos entre capturas
+MAX_CAPTURE_AGE_H  = 2      # borrar capturas de más de N horas
 
 INPUT_H, INPUT_W = 224, 224
 AGE_BIAS         = -7
@@ -29,6 +33,7 @@ CAMERA_PIPELINE = (
 
 os.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
 os.environ["WAYLAND_DISPLAY"] = "wayland-1"
+os.makedirs(CAPTURES_DIR, exist_ok=True)
 
 AGE_GROUPS = [
     (0,  12,  "0-12"),
@@ -46,6 +51,15 @@ def age_to_group(age):
             return label
     return f"{age}"
 
+# ── Limpiar capturas antiguas ──────────────────────────────────────────────────
+def cleanup_old_captures():
+    now = time.time()
+    cutoff = MAX_CAPTURE_AGE_H * 3600
+    for fname in os.listdir(CAPTURES_DIR):
+        fpath = os.path.join(CAPTURES_DIR, fname)
+        if os.path.isfile(fpath) and (now - os.path.getmtime(fpath)) > cutoff:
+            os.remove(fpath)
+
 # ── Cargar modelos ─────────────────────────────────────────────────────────────
 print("Cargando modelos...", flush=True)
 session  = ort.InferenceSession(MODEL_PATH, providers=["CPUExecutionProvider"])
@@ -58,10 +72,12 @@ print("Warm-up completado\n", flush=True)
 
 # ── Estado compartido ──────────────────────────────────────────────────────────
 state = {
-    "frame":       None,
-    "running":     True,
-    "gender_hist": {},
-    "lock":        threading.Lock(),
+    "frame":        None,
+    "running":      True,
+    "gender_hist":  {},
+    "last_result":  None,   # último resultado para detectar cambios
+    "last_capture": 0,      # timestamp de última captura
+    "lock":         threading.Lock(),
 }
 
 # ── Detector de cara ───────────────────────────────────────────────────────────
@@ -144,6 +160,8 @@ def predict(face_crop, face_key):
 
 # ── Thread de inferencia ───────────────────────────────────────────────────────
 def inference_thread():
+    cleanup_counter = 0
+
     while state["running"]:
         with state["lock"]:
             frame = state["frame"]
@@ -164,17 +182,43 @@ def inference_thread():
                 continue
             gender, conf, age, age_group, ms = predict(face_crop, f"face_{i}")
             detections.append({
-                "gender":           gender,
+                "gender":            gender,
                 "gender_confidence": conf,
-                "age_group":        age_group,
+                "age_group":         age_group,
             })
 
-        if detections:
+        if not detections:
+            continue
+
+        # ── Detectar si el resultado cambió ───────────────────────────────────
+        result_key = str([(d["gender"], d["age_group"]) for d in detections])
+        now        = time.time()
+        changed    = (result_key != state["last_result"])
+        cooldown_ok = (now - state["last_capture"]) >= CAPTURE_COOLDOWN_S
+
+        # Solo captura si cambió el resultado O pasaron N segundos
+        if changed or cooldown_ok:
+            timestamp_str  = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            image_filename = f"demo_{timestamp_str}_{uuid.uuid4().hex[:6]}.jpg"
+            image_path     = os.path.join(CAPTURES_DIR, image_filename)
+            cv2.imwrite(image_path, frame)
+
+            state["last_result"]  = result_key
+            state["last_capture"] = now
+
             event = {
                 "timestamp":  datetime.now(timezone.utc).isoformat(),
+                "source":     "demographics",
+                "image_path": image_filename,
                 "detections": detections,
             }
             print(json.dumps(event), flush=True)
+
+        # ── Limpiar capturas antiguas cada 500 iteraciones ────────────────────
+        cleanup_counter += 1
+        if cleanup_counter >= 500:
+            cleanup_old_captures()
+            cleanup_counter = 0
 
 # ── Cámara ─────────────────────────────────────────────────────────────────────
 print("Abriendo cámara...", flush=True)
@@ -187,10 +231,10 @@ if not cap.isOpened():
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 if not cap.isOpened():
-    print(" No se pudo abrir la cámara")
+    print("❌ No se pudo abrir la cámara")
     exit(1)
 
-print(" Cámara abierta. Ctrl+C para salir.\n", flush=True)
+print("✅ Cámara abierta. Ctrl+C para salir.\n", flush=True)
 
 t = threading.Thread(target=inference_thread, daemon=True)
 t.start()
@@ -199,13 +243,13 @@ try:
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("Error leyendo frame")
+            print("❌ Error leyendo frame")
             break
         with state["lock"]:
             state["frame"] = frame.copy()
 except KeyboardInterrupt:
-    print("\n Deteniendo...", flush=True)
+    print("\n🛑 Deteniendo...", flush=True)
 
 state["running"] = False
 cap.release()
-print(" Terminado", flush=True)
+print("✅ Terminado", flush=True)
