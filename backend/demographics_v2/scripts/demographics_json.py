@@ -7,6 +7,7 @@ import cv2
 import onnxruntime as ort
 from datetime import datetime, timezone
 import uuid
+import argparse
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 CAPTURES_DIR = "/home/ubuntu/smart-cooler/captures"
@@ -27,15 +28,28 @@ STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
 
 def _resolve_camera_source():
     source = os.environ.get(
-        "DEMO_CAMERA_SOURCE", os.environ.get("DEMO_CAMERA_INDEX", "/dev/video2")
+        "DEMO_CAMERA_SOURCE", os.environ.get("DEMO_CAMERA_INDEX", "/dev/video0")
     )
     return source
 
 
-def _build_gstreamer_pipeline_mjpeg(source):
+def _parse_args():
+    parser = argparse.ArgumentParser(description="Run demographics collector.")
+    parser.add_argument(
+        "source",
+        nargs="?",
+        help="Camera source (e.g. /dev/video4 or index).",
+    )
+    parser.add_argument("--width", type=int, help="Frame width override.")
+    parser.add_argument("--height", type=int, help="Frame height override.")
+    parser.add_argument("--fps", type=int, help="Frame FPS override.")
+    return parser.parse_args()
+
+
+def _build_gstreamer_pipeline_mjpeg(source, width, height, fps):
     return (
         f"v4l2src device={source} ! "
-        "image/jpeg,width=1280,height=720,framerate=30/1 ! "
+        f"image/jpeg,width={width},height={height},framerate={fps}/1 ! "
         "jpegdec ! videoconvert ! "
         "video/x-raw,format=BGR ! "
         "appsink drop=true max-buffers=1 sync=false"
@@ -256,25 +270,72 @@ def inference_thread():
 
 
 # ── Camera ───────────────────────────────────────────────────────────────────-
-print("Opening camera...", flush=True)
+args = _parse_args()
 camera_source = _resolve_camera_source()
+frame_width = int(os.environ.get("DEMO_FRAME_WIDTH", "640"))
+frame_height = int(os.environ.get("DEMO_FRAME_HEIGHT", "480"))
+frame_fps = int(os.environ.get("DEMO_FRAME_FPS", "30"))
+
+if args.source:
+    camera_source = args.source
+if args.width:
+    frame_width = args.width
+if args.height:
+    frame_height = args.height
+if args.fps:
+    frame_fps = args.fps
+
+def _validate_capture(cap):
+    if not cap.isOpened():
+        return False
+    ok, _ = cap.read()
+    if not ok:
+        cap.release()
+        return False
+    return True
+
+
+def _open_v4l2(source, width, height, fps):
+    v4l2_source = int(source) if isinstance(source, str) and source.isdigit() else source
+    cap = cv2.VideoCapture(v4l2_source, cv2.CAP_V4L2)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FPS, fps)
+    return cap
+
+
+def open_camera(source, width, height, fps):
+    candidates = [
+        (width, height, fps),
+        (640, 480, 30),
+        (320, 240, 30),
+    ]
+
+    for w, h, f in candidates:
+        cap = cv2.VideoCapture(
+            _build_gstreamer_pipeline_mjpeg(source, w, h, f), cv2.CAP_GSTREAMER
+        )
+        if _validate_capture(cap):
+            return cap
+
+        cap = cv2.VideoCapture(_build_gstreamer_pipeline(source), cv2.CAP_GSTREAMER)
+        if _validate_capture(cap):
+            return cap
+
+        cap = _open_v4l2(source, w, h, f)
+        if _validate_capture(cap):
+            return cap
+
+    return _open_v4l2(source, width, height, fps)
+
+
+print("Opening camera...", flush=True)
 print(f"Camera source: {camera_source}", flush=True)
 
-cap = cv2.VideoCapture(_build_gstreamer_pipeline_mjpeg(camera_source), cv2.CAP_GSTREAMER)
+cap = open_camera(camera_source, frame_width, frame_height, frame_fps)
 
 if not cap.isOpened():
-    print("GStreamer MJPEG pipeline failed, trying raw GStreamer pipeline...", flush=True)
-    cap = cv2.VideoCapture(_build_gstreamer_pipeline(camera_source), cv2.CAP_GSTREAMER)
-
-if not cap.isOpened():
-    print("GStreamer failed, falling back to V4L2...", flush=True)
-    v4l2_source = int(camera_source) if isinstance(camera_source, str) and camera_source.isdigit() else camera_source
-    cap = cv2.VideoCapture(v4l2_source, cv2.CAP_V4L2)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-if not cap.isOpened():
-    print("Could not open the camera")
+    print("Could not open the camera", flush=True)
     exit(1)
 
 print("Camera opened. Press Ctrl+C to exit.\n", flush=True)

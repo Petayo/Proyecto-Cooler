@@ -38,9 +38,13 @@ def start_demographics_collector(script_path: str):
         print(f"Starting demographics collector: {script_path}")
 
         env = os.environ.copy()
+        demo_source = env.get("DEMO_CAMERA_SOURCE") or env.get("DEMO_CAMERA_INDEX")
+        demo_args = ["python3", script_path]
+        if demo_source:
+            demo_args.append(str(demo_source))
 
         process = subprocess.Popen(
-            ["python3", script_path],
+            demo_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -62,6 +66,7 @@ def start_demographics_collector(script_path: str):
             try:
                 data = json.loads(line)
             except json.JSONDecodeError:
+                print(f"[demographics stdout] {line}")
                 continue
 
             event = {
@@ -93,9 +98,13 @@ def start_can_collector(script_path: str, startup_delay: float = 0):
 
         env = os.environ.copy()
         env["CAN_OUTPUT_JSON"] = "1"
+        can_source = env.get("CAN_CAMERA_SOURCE") or env.get("CAN_CAMERA_INDEX")
+        can_args = ["python3", script_path]
+        if can_source:
+            can_args.append(str(can_source))
 
         process = subprocess.Popen(
-            ["python3", script_path],
+            can_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -117,6 +126,7 @@ def start_can_collector(script_path: str, startup_delay: float = 0):
             try:
                 data = json.loads(line)
             except json.JSONDecodeError:
+                print(f"[can stdout] {line}")
                 continue
 
             event = {

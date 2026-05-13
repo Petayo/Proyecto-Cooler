@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timezone, timedelta
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -10,10 +11,31 @@ CAPTURES_DIR = os.environ.get("CAPTURES_DIR", "/home/ubuntu/smart-cooler/capture
 DEFAULT_HOST = os.environ.get("EDGE_HOST", "192.168.1.153")
 DEFAULT_PORT = int(os.environ.get("EDGE_PORT", "8000"))
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    demographics_script = os.path.join(
+        base_dir, "demographics_v2", "scripts", "demographics_json.py"
+    )
+    can_script = os.path.join(
+        base_dir, "can_detector_v1", "scripts", "can_inference.py"
+    )
+
+    collector.start_demographics_collector(demographics_script)
+    collector.start_can_collector(can_script, startup_delay=3.0)
+
+    print(f"Backend ready at http://{DEFAULT_HOST}:{DEFAULT_PORT}")
+    print(f"Docs at http://{DEFAULT_HOST}:{DEFAULT_PORT}/docs")
+
+    yield
+
+
 app = FastAPI(
     title="Smart Cooler API",
     description="Demographics + Can Detection API — Rubik Pi 3",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -156,23 +178,6 @@ def list_captures(request: Request, limit: int = 20):
         captures.append(item)
 
     return {"captures": captures}
-
-
-@app.on_event("startup")
-def startup():
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    demographics_script = os.path.join(
-        base_dir, "demographics_v2", "scripts", "demographics_json.py"
-    )
-    can_script = os.path.join(
-        base_dir, "can_detector_v1", "scripts", "can_inference.py"
-    )
-
-    collector.start_demographics_collector(demographics_script)
-    collector.start_can_collector(can_script, startup_delay=3.0)
-
-    print(f"Backend ready at http://{DEFAULT_HOST}:{DEFAULT_PORT}")
-    print(f"Docs at http://{DEFAULT_HOST}:{DEFAULT_PORT}/docs")
 
 
 if __name__ == "__main__":
