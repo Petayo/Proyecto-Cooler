@@ -273,38 +273,43 @@ export const deriveProductTimeline = (canEvents, product, now = new Date()) => {
   };
 };
 
-const CORR_WINDOW_MS = 3 * 60 * 1000; // 3-minute association window
-
 export const deriveProductDemographics = (canEvents, demoEvents) => {
   const validCan = Array.isArray(canEvents) ? canEvents : [];
   const validDemo = Array.isArray(demoEvents) ? demoEvents : [];
 
-  // Group OUT timestamps by product
-  const outsByProduct = {};
-  for (const e of validCan) {
-    if (e.action !== 'OUT') continue;
-    if (!outsByProduct[e.label]) outsByProduct[e.label] = [];
-    outsByProduct[e.label].push(e.timestamp.valueOf());
-  }
+  const outs = validCan
+    .filter((e) => e.action === 'OUT')
+    .sort((a, b) => a.timestamp.valueOf() - b.timestamp.valueOf());
+
+  const demos = [...validDemo].sort(
+    (a, b) => a.timestamp.valueOf() - b.timestamp.valueOf()
+  );
 
   const result = {};
+  let demoIndex = 0;
+  let lastDemo = null;
 
-  for (const [product, timestamps] of Object.entries(outsByProduct)) {
-    const genders = {};
-    const ageGroups = {};
-    const seen = new Set();
-
-    for (const demoEvt of validDemo) {
-      if (seen.has(demoEvt.id)) continue;
-      const t = demoEvt.timestamp.valueOf();
-      const isNear = timestamps.some((ts) => Math.abs(t - ts) <= CORR_WINDOW_MS);
-      if (!isNear) continue;
-      seen.add(demoEvt.id);
-      genders[demoEvt.gender] = (genders[demoEvt.gender] || 0) + 1;
-      ageGroups[demoEvt.ageGroup] = (ageGroups[demoEvt.ageGroup] || 0) + 1;
+  for (const outEvent of outs) {
+    while (
+      demoIndex < demos.length &&
+      demos[demoIndex].timestamp.valueOf() <= outEvent.timestamp.valueOf()
+    ) {
+      lastDemo = demos[demoIndex];
+      demoIndex += 1;
     }
 
-    result[product] = { genders, ageGroups, correlatedCount: seen.size };
+    if (!lastDemo) continue;
+
+    const product = outEvent.label;
+    if (!result[product]) {
+      result[product] = { genders: {}, ageGroups: {}, correlatedCount: 0 };
+    }
+
+    result[product].genders[lastDemo.gender] =
+      (result[product].genders[lastDemo.gender] || 0) + 1;
+    result[product].ageGroups[lastDemo.ageGroup] =
+      (result[product].ageGroups[lastDemo.ageGroup] || 0) + 1;
+    result[product].correlatedCount += 1;
   }
 
   return result;

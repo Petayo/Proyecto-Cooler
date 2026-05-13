@@ -169,7 +169,7 @@ def startup():
     )
 
     collector.start_demographics_collector(demographics_script)
-    collector.start_can_collector(can_script)
+    collector.start_can_collector(can_script, startup_delay=3.0)
 
     print(f"Backend ready at http://{DEFAULT_HOST}:{DEFAULT_PORT}")
     print(f"Docs at http://{DEFAULT_HOST}:{DEFAULT_PORT}/docs")

@@ -32,11 +32,20 @@ def _resolve_camera_source():
     return source
 
 
-def _build_gstreamer_pipeline(source):
+def _build_gstreamer_pipeline_mjpeg(source):
     return (
         f"v4l2src device={source} ! "
         "image/jpeg,width=1280,height=720,framerate=30/1 ! "
         "jpegdec ! videoconvert ! "
+        "video/x-raw,format=BGR ! "
+        "appsink drop=true max-buffers=1 sync=false"
+    )
+
+
+def _build_gstreamer_pipeline(source):
+    return (
+        f"v4l2src device={source} ! "
+        "videoconvert ! "
         "video/x-raw,format=BGR ! "
         "appsink drop=true max-buffers=1 sync=false"
     )
@@ -249,13 +258,18 @@ def inference_thread():
 # ── Camera ───────────────────────────────────────────────────────────────────-
 print("Opening camera...", flush=True)
 camera_source = _resolve_camera_source()
-cap = cv2.VideoCapture(_build_gstreamer_pipeline(camera_source), cv2.CAP_GSTREAMER)
+print(f"Camera source: {camera_source}", flush=True)
+
+cap = cv2.VideoCapture(_build_gstreamer_pipeline_mjpeg(camera_source), cv2.CAP_GSTREAMER)
 
 if not cap.isOpened():
-    print("GStreamer failed, falling back to V4L2...")
-    if isinstance(camera_source, str) and camera_source.isdigit():
-        camera_source = int(camera_source)
-    cap = cv2.VideoCapture(camera_source)
+    print("GStreamer MJPEG pipeline failed, trying raw GStreamer pipeline...", flush=True)
+    cap = cv2.VideoCapture(_build_gstreamer_pipeline(camera_source), cv2.CAP_GSTREAMER)
+
+if not cap.isOpened():
+    print("GStreamer failed, falling back to V4L2...", flush=True)
+    v4l2_source = int(camera_source) if isinstance(camera_source, str) and camera_source.isdigit() else camera_source
+    cap = cv2.VideoCapture(v4l2_source, cv2.CAP_V4L2)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 

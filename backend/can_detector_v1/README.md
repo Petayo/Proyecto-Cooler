@@ -44,7 +44,7 @@ CAN_CAMERA_SOURCE=/dev/video2 python3 scripts/can_inference.py
 ```
 
 ```bash
-CAN_CAMERA_INDEX=2 python3 scripts/can_inference.py
+c=2 python3 scripts/can_inference.py
 ```
 
 Use `v4l2-ctl --list-devices` to confirm which `/dev/video*` node belongs to the can camera.

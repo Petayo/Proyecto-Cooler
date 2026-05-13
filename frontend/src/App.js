@@ -49,11 +49,26 @@ const collectRecentImages = (events, labelFn, max = 6) => {
     }, []);
 };
 
-const extractCaptureImages = (captures, prefix, label, max = 6) =>
+const extractCaptureImages = (captures, prefix, label, labelMap = {}, max = 6) =>
   captures
     .filter((c) => c.filename?.startsWith(prefix))
     .slice(0, max)
-    .map((c) => ({ id: c.filename, url: c.url, label }));
+    .map((c) => ({
+      id: c.filename,
+      url: c.url,
+      label: labelMap[c.filename] || label,
+    }));
+
+const buildCaptureLabelMap = (events, labelFn) => {
+  const map = {};
+  for (const event of events || []) {
+    if (!event.imageUrl) continue;
+    const filename = event.imageUrl.split('/').pop();
+    if (!filename) continue;
+    map[filename] = labelFn(event);
+  }
+  return map;
+};
 
 // Demand level: 0=ok, 1=moderate, 2=high
 const demandLevel = (out, maxOut) => {
@@ -355,15 +370,28 @@ function App() {
     [canLoading, canError, canStale]
   );
 
+  const demoCaptureLabels = useMemo(
+    () => buildCaptureLabelMap(demoEvents, (e) => `${e.gender} / ${e.ageGroup}`),
+    [demoEvents]
+  );
+  const canCaptureLabels = useMemo(
+    () => buildCaptureLabelMap(canEvents, (e) => e.label),
+    [canEvents]
+  );
+
   const recentDemoImages = useMemo(() => {
     const from = collectRecentImages(demoEvents, (e) => `${e.gender} / ${e.ageGroup}`);
-    return from.length ? from : extractCaptureImages(captures, 'demo_', 'Demographics capture');
-  }, [demoEvents, captures]);
+    return from.length
+      ? from
+      : extractCaptureImages(captures, 'demo_', 'Demographics capture', demoCaptureLabels);
+  }, [demoEvents, captures, demoCaptureLabels]);
 
   const recentCanImages = useMemo(() => {
     const from = collectRecentImages(canEvents, (e) => e.label);
-    return from.length ? from : extractCaptureImages(captures, 'can_', 'Can capture');
-  }, [canEvents, captures]);
+    return from.length
+      ? from
+      : extractCaptureImages(captures, 'can_', 'Can capture', canCaptureLabels);
+  }, [canEvents, captures, canCaptureLabels]);
 
   const maxProductOut = Math.max(0, ...productMetrics.products.map((p) => p.out));
 

@@ -3,9 +3,8 @@ import { APP_CONFIG, buildCanUrl } from '../config/appConfig';
 import { loadCanEvents, saveCanEvents } from '../utils/storage';
 import { generateMockCanEvents } from '../utils/mockData';
 
-// How many consecutive frames with the same new count before we confirm a change.
-// Filters out CV flicker where a can is briefly mis-detected.
-const DEBOUNCE_FRAMES = 3;
+// Window size for smoothing counts and detecting in/out changes.
+const WINDOW_MS = 3000;
 
 const initEvents = () => {
   const stored = loadCanEvents();
@@ -29,10 +28,12 @@ export const useCanPolling = () => {
   const [lastSuccessAt, setLastSuccessAt] = useState(null);
   const [now, setNow] = useState(Date.now());
 
-  // Per-label stable count — null until we see the first frame
-  const stableCountsRef = useRef(null);
-  // Per-label pending candidate: { count, frames }
-  const pendingRef = useRef({});
+  const windowStartRef = useRef(null);
+  const windowSumsRef = useRef({});
+  const windowFramesRef = useRef(0);
+  const windowLastImageRef = useRef(null);
+  const windowLastTimeRef = useRef(null);
+  const prevWindowAvgRef = useRef(null);
   // Timestamp string of the last frame we processed (avoid re-processing same frame)
   const lastFrameTsRef = useRef(null);
 
@@ -48,66 +49,93 @@ export const useCanPolling = () => {
   useEffect(() => {
     let active = true;
 
+    const accumulateCounts = (target, counts) => {
+      for (const [label, count] of Object.entries(counts)) {
+        target[label] = (target[label] || 0) + count;
+      }
+    };
+
+    const finalizeWindow = () => {
+      const frames = windowFramesRef.current;
+      if (!frames) return [];
+
+      const avgCounts = {};
+      for (const [label, sum] of Object.entries(windowSumsRef.current)) {
+        avgCounts[label] = Math.round(sum / frames);
+      }
+
+      const previous = prevWindowAvgRef.current;
+      prevWindowAvgRef.current = avgCounts;
+
+      if (!previous) return [];
+
+      const allLabels = new Set([
+        ...Object.keys(previous),
+        ...Object.keys(avgCounts),
+      ]);
+      const newEvents = [];
+      const imageUrl = windowLastImageRef.current;
+      const eventTime = windowLastTimeRef.current || new Date();
+
+      for (const label of allLabels) {
+        const prevCount = previous[label] ?? 0;
+        const currCount = avgCounts[label] ?? 0;
+        const delta = currCount - prevCount;
+        if (!delta) continue;
+
+        const action = delta > 0 ? 'IN' : 'OUT';
+        for (let i = 0; i < Math.abs(delta); i++) {
+          newEvents.push({
+            id: `cnt-${eventTime.valueOf()}-${label}-${i}-${Math.random()
+              .toString(36)
+              .slice(2, 6)}`,
+            timestamp: new Date(eventTime),
+            label,
+            confidence: null,
+            action,
+            imageUrl,
+          });
+        }
+      }
+
+      return newEvents;
+    };
+
     const processFrame = (frame) => {
       const frameCounts = countLabelsInFrame(frame);
-
-      // First frame ever — establish baseline, emit nothing
-      if (stableCountsRef.current === null) {
-        stableCountsRef.current = { ...frameCounts };
+      const frameTime = new Date(frame.timestamp || Date.now());
+      if (Number.isNaN(frameTime.valueOf())) {
         return [];
       }
 
-      const stable = stableCountsRef.current;
-      const allLabels = new Set([
-        ...Object.keys(stable),
-        ...Object.keys(frameCounts),
-      ]);
-      const newEvents = [];
-
-      for (const label of allLabels) {
-        const stableCount = stable[label] ?? 0;
-        const frameCount = frameCounts[label] ?? 0;
-
-        if (frameCount === stableCount) {
-          // Back to stable — cancel any pending change for this label
-          delete pendingRef.current[label];
-          continue;
-        }
-
-        const pending = pendingRef.current[label];
-
-        if (pending && pending.count === frameCount) {
-          // Same candidate as before — increment confidence counter
-          pending.frames += 1;
-
-          if (pending.frames >= DEBOUNCE_FRAMES) {
-            // Change confirmed — emit one event per unit of delta
-            const delta = frameCount - stableCount;
-            const action = delta > 0 ? 'IN' : 'OUT';
-            const imageUrl =
-              typeof frame.image_url === 'string' ? frame.image_url : null;
-
-            for (let i = 0; i < Math.abs(delta); i++) {
-              newEvents.push({
-                id: `cnt-${Date.now()}-${label}-${i}-${Math.random()
-                  .toString(36)
-                  .slice(2, 6)}`,
-                timestamp: new Date(),
-                label,
-                confidence: null,
-                action,
-                imageUrl,
-              });
-            }
-
-            stable[label] = frameCount;
-            delete pendingRef.current[label];
-          }
-        } else {
-          // New candidate (or candidate changed mid-debounce) — start over
-          pendingRef.current[label] = { count: frameCount, frames: 1 };
-        }
+      if (windowStartRef.current === null) {
+        windowStartRef.current = frameTime;
+        windowSumsRef.current = { ...frameCounts };
+        windowFramesRef.current = 1;
+        windowLastImageRef.current =
+          typeof frame.image_url === 'string' ? frame.image_url : null;
+        windowLastTimeRef.current = frameTime;
+        return [];
       }
+
+      const elapsed = frameTime.valueOf() - windowStartRef.current.valueOf();
+      if (elapsed < WINDOW_MS) {
+        accumulateCounts(windowSumsRef.current, frameCounts);
+        windowFramesRef.current += 1;
+        windowLastImageRef.current =
+          typeof frame.image_url === 'string' ? frame.image_url : null;
+        windowLastTimeRef.current = frameTime;
+        return [];
+      }
+
+      const newEvents = finalizeWindow();
+
+      windowStartRef.current = frameTime;
+      windowSumsRef.current = { ...frameCounts };
+      windowFramesRef.current = 1;
+      windowLastImageRef.current =
+        typeof frame.image_url === 'string' ? frame.image_url : null;
+      windowLastTimeRef.current = frameTime;
 
       return newEvents;
     };

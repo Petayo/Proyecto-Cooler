@@ -1,6 +1,7 @@
 import os
 import subprocess
 import threading
+import time
 import json
 from datetime import datetime, timezone
 from collections import deque
@@ -79,12 +80,14 @@ def start_demographics_collector(script_path: str):
     t.start()
 
 
-def start_can_collector(script_path: str):
+def start_can_collector(script_path: str, startup_delay: float = 0):
     """Run can_inference.py with JSON output and store events."""
     global can_detector_running
 
     def _run():
         global can_detector_running
+        if startup_delay:
+            time.sleep(startup_delay)
         can_detector_running = True
         print(f"Starting can collector: {script_path}")
 
