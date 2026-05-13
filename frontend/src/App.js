@@ -44,20 +44,70 @@ const collectRecentImages = (events, labelFn, max = 6) => {
     .reduce((acc, e) => {
       if (!e.imageUrl || seen.has(e.imageUrl) || acc.length >= max) return acc;
       seen.add(e.imageUrl);
-      acc.push({ id: e.id, url: e.imageUrl, label: labelFn(e) });
+      acc.push({ id: e.id, url: e.imageUrl, label: labelFn(e), timestamp: e.timestamp });
       return acc;
     }, []);
+};
+
+const parseCaptureTimestamp = (filename) => {
+  if (typeof filename !== 'string') return null;
+  const match = filename.match(/_(\d{8})_(\d{6})_/);
+  if (!match) return null;
+
+  const dateStr = match[1];
+  const timeStr = match[2];
+  const year = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(4, 6));
+  const day = Number(dateStr.slice(6, 8));
+  const hour = Number(timeStr.slice(0, 2));
+  const minute = Number(timeStr.slice(2, 4));
+  const second = Number(timeStr.slice(4, 6));
+
+  if (
+    [year, month, day, hour, minute, second].some((v) => Number.isNaN(v))
+  ) {
+    return null;
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
 };
 
 const extractCaptureImages = (captures, prefix, label, labelMap = {}, max = 6) =>
   captures
     .filter((c) => c.filename?.startsWith(prefix))
-    .slice(0, max)
     .map((c) => ({
       id: c.filename,
       url: c.url,
       label: labelMap[c.filename] || label,
-    }));
+      timestamp: parseCaptureTimestamp(c.filename),
+    }))
+    .sort((a, b) => (b.timestamp?.valueOf() || 0) - (a.timestamp?.valueOf() || 0))
+    .slice(0, max);
+
+const mergeRecentImages = (eventImages, captureImages, max = 6) => {
+  const byUrl = new Map();
+  const add = (item) => {
+    if (!item?.url) return;
+    const existing = byUrl.get(item.url);
+    if (!existing) {
+      byUrl.set(item.url, item);
+      return;
+    }
+
+    const existingTime = existing.timestamp?.valueOf() || 0;
+    const nextTime = item.timestamp?.valueOf() || 0;
+    if (nextTime > existingTime) {
+      byUrl.set(item.url, item);
+    }
+  };
+
+  eventImages.forEach(add);
+  captureImages.forEach(add);
+
+  return [...byUrl.values()]
+    .sort((a, b) => (b.timestamp?.valueOf() || 0) - (a.timestamp?.valueOf() || 0))
+    .slice(0, max);
+};
 
 const buildCaptureLabelMap = (events, labelFn) => {
   const map = {};
@@ -380,17 +430,28 @@ function App() {
   );
 
   const recentDemoImages = useMemo(() => {
-    const from = collectRecentImages(demoEvents, (e) => `${e.gender} / ${e.ageGroup}`);
-    return from.length
-      ? from
-      : extractCaptureImages(captures, 'demo_', 'Demographics capture', demoCaptureLabels);
+    const fromEvents = collectRecentImages(
+      demoEvents,
+      (e) => `${e.gender} / ${e.ageGroup}`
+    );
+    const fromCaptures = extractCaptureImages(
+      captures,
+      'demo_',
+      'Demographics capture',
+      demoCaptureLabels
+    );
+    return mergeRecentImages(fromEvents, fromCaptures);
   }, [demoEvents, captures, demoCaptureLabels]);
 
   const recentCanImages = useMemo(() => {
-    const from = collectRecentImages(canEvents, (e) => e.label);
-    return from.length
-      ? from
-      : extractCaptureImages(captures, 'can_', 'Can capture', canCaptureLabels);
+    const fromEvents = collectRecentImages(canEvents, (e) => e.label);
+    const fromCaptures = extractCaptureImages(
+      captures,
+      'can_',
+      'Can capture',
+      canCaptureLabels
+    );
+    return mergeRecentImages(fromEvents, fromCaptures);
   }, [canEvents, captures, canCaptureLabels]);
 
   const maxProductOut = Math.max(0, ...productMetrics.products.map((p) => p.out));

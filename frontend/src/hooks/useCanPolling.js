@@ -140,6 +140,11 @@ export const useCanPolling = () => {
       return newEvents;
     };
 
+    const parseFrameTime = (frame) => {
+      const time = new Date(frame?.timestamp);
+      return Number.isNaN(time.valueOf()) ? null : time;
+    };
+
     const fetchPredictions = async () => {
       try {
         const response = await fetch(buildCanUrl(), {
@@ -156,21 +161,37 @@ export const useCanPolling = () => {
         if (!active) return;
 
         if (frames.length > 0) {
-          // Only care about the most recent frame
-          const latest = frames.reduce((best, f) =>
-            new Date(f.timestamp) > new Date(best.timestamp) ? f : best
-          );
+          const ordered = [...frames].sort((a, b) => {
+            const aTime = parseFrameTime(a);
+            const bTime = parseFrameTime(b);
+            if (!aTime && !bTime) return 0;
+            if (!aTime) return 1;
+            if (!bTime) return -1;
+            return aTime - bTime;
+          });
 
-          // Skip if we already processed this exact frame
-          if (latest.timestamp !== lastFrameTsRef.current) {
-            lastFrameTsRef.current = latest.timestamp;
-            const newEvents = processFrame(latest);
+          const freshEvents = [];
+          for (const frame of ordered) {
+            const frameTime = parseFrameTime(frame);
+            if (!frameTime) continue;
 
-            if (newEvents.length > 0) {
-              setEvents((prev) =>
-                [...prev, ...newEvents].slice(-APP_CONFIG.maxCanEvents)
-              );
+            const frameKey = frameTime.toISOString();
+            if (lastFrameTsRef.current && frameKey <= lastFrameTsRef.current) {
+              continue;
             }
+
+            const newEvents = processFrame(frame);
+            if (newEvents.length > 0) {
+              freshEvents.push(...newEvents);
+            }
+
+            lastFrameTsRef.current = frameKey;
+          }
+
+          if (freshEvents.length > 0) {
+            setEvents((prev) =>
+              [...prev, ...freshEvents].slice(-APP_CONFIG.maxCanEvents)
+            );
           }
         }
 
