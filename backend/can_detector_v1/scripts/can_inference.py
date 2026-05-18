@@ -2,15 +2,32 @@ import os
 import sys
 import json
 import argparse
+import time
 from datetime import datetime, timezone
 import uuid
 from edge_impulse_linux.image import ImageImpulseRunner
 import cv2
 
+CAPTURE_INTERVAL_S = float(os.environ.get("CAN_CAPTURE_INTERVAL_S", "1.0"))
+MAX_CAPTURE_AGE_H = float(os.environ.get("CAN_MAX_CAPTURE_AGE_H", "2.0"))
+
 # This line looks for the model in the models folder
 model_path = os.path.join(os.path.dirname(__file__), "../models/soda_detector.eim")
 CAPTURES_DIR = os.environ.get("CAPTURES_DIR", "/home/ubuntu/smart-cooler/captures")
 os.makedirs(CAPTURES_DIR, exist_ok=True)
+
+
+def _cleanup_old_captures():
+    cutoff = time.time() - MAX_CAPTURE_AGE_H * 3600
+    for fname in os.listdir(CAPTURES_DIR):
+        if not fname.startswith("can_") or not fname.endswith(".jpg"):
+            continue
+        fpath = os.path.join(CAPTURES_DIR, fname)
+        try:
+            if os.path.getmtime(fpath) < cutoff:
+                os.remove(fpath)
+        except OSError:
+            pass
 
 
 def _build_gstreamer_pipeline_mjpeg(source, width, height, fps):
@@ -176,6 +193,8 @@ def main():
         print("Streaming can predictions...", flush=True)
 
         frame_count = 0
+        last_capture_time = 0.0
+        cleanup_counter = 0
 
         while True:
             success, img = cap.read()
@@ -233,7 +252,9 @@ def main():
                             }
                         )
 
-            if detections:
+            now_time = time.time()
+            if now_time - last_capture_time >= CAPTURE_INTERVAL_S:
+                last_capture_time = now_time
                 timestamp = datetime.now(timezone.utc)
                 timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
                 image_filename = f"can_{timestamp_str}_{uuid.uuid4().hex[:6]}.jpg"
@@ -283,11 +304,15 @@ def main():
 
                 if output_json:
                     print(json.dumps(event), flush=True)
-                else:
+                elif predictions:
                     print("Predictions: " + ", ".join(predictions), flush=True)
-            elif frame_count % log_every == 0:
-                if not output_json:
+                elif frame_count % log_every == 0:
                     print("No detections above threshold.", flush=True)
+
+                cleanup_counter += 1
+                if cleanup_counter >= 300:
+                    _cleanup_old_captures()
+                    cleanup_counter = 0
 
 
 if __name__ == "__main__":

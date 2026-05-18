@@ -448,7 +448,7 @@ function App() {
     const fromCaptures = extractCaptureImages(
       captures,
       'can_',
-      'Can capture',
+      'Sodas',
       canCaptureLabels
     );
     return mergeRecentImages(fromEvents, fromCaptures);
@@ -473,8 +473,6 @@ function App() {
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 20);
   }, [demoEvents, canEvents]);
-
-  const hasCaptures = recentDemoImages.length > 0 || recentCanImages.length > 0;
 
   return (
     <div className="app-shell">
@@ -655,36 +653,39 @@ function App() {
         </section>
 
         {/* Captures */}
-        {hasCaptures && (
-          <section className="two-col" aria-label="Recent captures">
-            {recentDemoImages.length > 0 && (
-              <article className="panel section-card">
-                <h3>Recent demographics captures</h3>
-                <div className="image-grid">
-                  {recentDemoImages.map((item) => (
-                    <figure className="image-card" key={item.id}>
-                      <img src={item.url} alt={item.label} loading="lazy" />
-                      <figcaption>{item.label}</figcaption>
-                    </figure>
-                  ))}
-                </div>
-              </article>
+        <section className="two-col" aria-label="Recent captures">
+          {recentDemoImages.length > 0 && (
+            <article className="panel section-card">
+              <h3>Recent demographics captures</h3>
+              <div className="image-grid">
+                {recentDemoImages.map((item) => (
+                  <figure className="image-card" key={item.id}>
+                    <img src={item.url} alt={item.label} loading="lazy" />
+                    <figcaption>{item.label}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            </article>
+          )}
+          <article className="panel section-card">
+            <h3>Can camera — live view</h3>
+            {recentCanImages.length > 0 ? (
+              <div className="image-grid">
+                {recentCanImages.map((item) => (
+                  <figure className="image-card" key={item.id}>
+                    <img src={item.url} alt={item.label} loading="lazy" />
+                    <figcaption>
+                      {item.label || 'No detection'}
+                      {item.timestamp ? ` · ${fmtTime(item.timestamp)}` : ''}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-text">Waiting for can camera frames...</p>
             )}
-            {recentCanImages.length > 0 && (
-              <article className="panel section-card">
-                <h3>Recent can captures</h3>
-                <div className="image-grid">
-                  {recentCanImages.map((item) => (
-                    <figure className="image-card" key={item.id}>
-                      <img src={item.url} alt={item.label} loading="lazy" />
-                      <figcaption>{item.label}</figcaption>
-                    </figure>
-                  ))}
-                </div>
-              </article>
-            )}
-          </section>
-        )}
+          </article>
+        </section>
 
         {demoError || canError ? (
           <aside className="panel warning-panel" role="status">

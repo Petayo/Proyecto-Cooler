@@ -10,7 +10,7 @@ export const useCapturesPolling = () => {
 
     const fetchCaptures = async () => {
       try {
-        const response = await fetch(`${buildCapturesUrl()}?limit=20`, {
+        const response = await fetch(`${buildCapturesUrl()}?limit=30`, {
           headers: { Accept: 'application/json' },
         });
 
@@ -33,7 +33,7 @@ export const useCapturesPolling = () => {
     };
 
     fetchCaptures();
-    const interval = setInterval(fetchCaptures, APP_CONFIG.pollingIntervalMs);
+    const interval = setInterval(fetchCaptures, 1000);
 
     return () => {
       active = false;
