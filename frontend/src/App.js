@@ -72,13 +72,13 @@ const parseCaptureTimestamp = (filename) => {
   return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
 };
 
-const extractCaptureImages = (captures, prefix, label, labelMap = {}, max = 6) =>
+const extractCaptureImages = (captures, prefix, labelFn, labelMap = {}, max = 6) =>
   captures
     .filter((c) => c.filename?.startsWith(prefix))
     .map((c) => ({
       id: c.filename,
       url: c.url,
-      label: labelMap[c.filename] || label,
+      label: labelMap[c.filename] || labelFn(c),
       timestamp: parseCaptureTimestamp(c.filename),
     }))
     .sort((a, b) => (b.timestamp?.valueOf() || 0) - (a.timestamp?.valueOf() || 0))
@@ -437,7 +437,7 @@ function App() {
     const fromCaptures = extractCaptureImages(
       captures,
       'demo_',
-      'Demographics capture',
+      (c) => c.gender && c.age_group ? `${c.gender} / ${c.age_group}` : 'Demographics capture',
       demoCaptureLabels
     );
     return mergeRecentImages(fromEvents, fromCaptures);
@@ -448,7 +448,7 @@ function App() {
     const fromCaptures = extractCaptureImages(
       captures,
       'can_',
-      'Sodas',
+      (c) => c.label || 'No detection',
       canCaptureLabels
     );
     return mergeRecentImages(fromEvents, fromCaptures);

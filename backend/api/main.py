@@ -168,6 +168,26 @@ def list_captures(request: Request, limit: int = 20):
     files = sorted(os.listdir(CAPTURES_DIR), reverse=True)[:limit]
     base = str(request.base_url).rstrip("/")
 
+    all_events = collector.get_events(limit=2000)
+    event_meta = {}
+    for event in all_events:
+        img_path = event.get("image_path")
+        if not img_path:
+            continue
+        detections = event.get("detections", [])
+        if not detections:
+            continue
+        source = event.get("source", "")
+        if source == "can_detector":
+            top = max(detections, key=lambda d: d.get("confidence", 0))
+            event_meta[img_path] = {"label": top.get("label", "")}
+        elif source == "demographics":
+            det = detections[0]
+            event_meta[img_path] = {
+                "gender": det.get("gender", ""),
+                "age_group": det.get("age_group", ""),
+            }
+
     captures = []
     for file_name in files:
         if not file_name.endswith(".jpg"):
@@ -175,6 +195,9 @@ def list_captures(request: Request, limit: int = 20):
         item = {"filename": file_name}
         if base:
             item["url"] = f"{base}/captures/{file_name}"
+        meta = event_meta.get(file_name)
+        if meta:
+            item.update(meta)
         captures.append(item)
 
     return {"captures": captures}
